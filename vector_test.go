@@ -215,7 +215,7 @@ func (NoiseSuite) TestVectors(c *C) {
 
 		var res []byte
 		out := &SimplePayload{}
-		writer.WriteMessage(out, payload)
+		csW0, csW1, _ = writer.WriteMessage(out, payload)
 		c.Assert(fmt.Sprintf("%x", out.Serialize()), Equals, string(splitLine[1]))
 		res, csR0, csR1, err = reader.ReadMessage(nil, out)
 		c.Assert(err, IsNil)
