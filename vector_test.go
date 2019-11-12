@@ -213,10 +213,11 @@ func (NoiseSuite) TestVectors(c *C) {
 			writer, reader = hsR, hsI
 		}
 
-		var msg, res []byte
-		msg, csW0, csW1, _ = writer.WriteMessage(nil, payload)
-		c.Assert(fmt.Sprintf("%x", msg), Equals, string(splitLine[1]))
-		res, csR0, csR1, err = reader.ReadMessage(nil, msg)
+		var res []byte
+		out := &SimplePayload{}
+		writer.WriteMessage(out, payload)
+		c.Assert(fmt.Sprintf("%x", out.Serialize()), Equals, string(splitLine[1]))
+		res, csR0, csR1, err = reader.ReadMessage(nil, out)
 		c.Assert(err, IsNil)
 		c.Assert(string(res), Equals, string(payload))
 		payload = nil

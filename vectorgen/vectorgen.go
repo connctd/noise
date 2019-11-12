@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/flynn/noise"
 	. "github.com/flynn/noise"
 )
 
@@ -165,14 +166,15 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, pskPlacem
 		if payloads {
 			payload = fmt.Sprintf("test_msg_%d", i)
 		}
-		var msg []byte
-		msg, cs0, cs1, _ = writer.WriteMessage(nil, []byte(payload))
-		_, _, _, err := reader.ReadMessage(nil, msg)
+
+		hsOut := &noise.SimplePayload{}
+		cs0, cs1, _ = writer.WriteMessage(hsOut, []byte(payload))
+		_, _, _, err := reader.ReadMessage(nil, hsOut)
 		if err != nil {
 			panic(err)
 		}
 		fmt.Fprintf(out, "msg_%d_payload=%x\n", i, payload)
-		fmt.Fprintf(out, "msg_%d_ciphertext=%x\n", i, msg)
+		fmt.Fprintf(out, "msg_%d_ciphertext=%x\n", i, hsOut.Serialize())
 	}
 
 	payload0 := []byte("yellowsubmarine")
