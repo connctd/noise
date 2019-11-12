@@ -187,12 +187,32 @@ type HandshakePattern struct {
 }
 
 const (
+	// MessagePatternS Appends EncryptAndHash(s.public_key) to the buffer.
+	//
+	// Sets temp to the next DHLEN + 16 bytes of the message if HasKey() == True, or to the next DHLEN bytes otherwise. Sets rs (which must be empty) to DecryptAndHash(temp).
 	MessagePatternS MessagePattern = iota
+	// MessagePatternE Sets e (which must be empty) to GENERATE_KEYPAIR().
+	// Appends e.public_key to the buffer. Calls MixHash(e.public_key)
+	//
+	// Sets re (which must be empty) to the next DHLEN bytes from the message. Calls MixHash(re.public_key).
 	MessagePatternE
+	// MessagePatternDHEE Calls MixKey(DH(e, re)).
+	//
+	// Calls MixKey(DH(e, re)).
 	MessagePatternDHEE
+	// MessagePatternDHES Calls MixKey(DH(e, rs)) if initiator, MixKey(DH(s, re)) if responder.
+	//
+	// Calls MixKey(DH(e, rs)) if initiator, MixKey(DH(s, re)) if responder.
 	MessagePatternDHES
+	// MessagePatternDHSE Calls MixKey(DH(s, re)) if initiator, MixKey(DH(e, rs)) if responder.
+	//
+	// Calls MixKey(DH(s, re)) if initiator, MixKey(DH(e, rs)) if responder.
 	MessagePatternDHSE
+	// MessagePatternDHSS Calls MixKey(DH(s, rs)).
+	//
+	// Calls MixKey(DH(s, rs)).
 	MessagePatternDHSS
+	// MessagePatternPSK for PresharedKey
 	MessagePatternPSK
 )
 
@@ -329,15 +349,15 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 // remote peer, the other is used for decryption of messages from the remote
 // peer. It is an error to call this method out of sync with the handshake
 // pattern.
-func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState, *CipherState, error) {
+func (s *HandshakeState) WriteMessage(out WriteableHandshakeMessage, payload []byte) (*CipherState, *CipherState, error) {
 	if !s.shouldWrite {
-		return nil, nil, nil, errors.New("noise: unexpected call to WriteMessage should be ReadMessage")
+		return nil, nil, errors.New("noise: unexpected call to WriteMessage should be ReadMessage")
 	}
 	if s.msgIdx > len(s.messagePatterns)-1 {
-		return nil, nil, nil, errors.New("noise: no handshake messages left")
+		return nil, nil, errors.New("noise: no handshake messages left")
 	}
 	if len(payload) > MaxMsgLen {
-		return nil, nil, nil, errors.New("noise: message is too long")
+		return nil, nil, errors.New("noise: message is too long")
 	}
 
 	for _, msg := range s.messagePatterns[s.msgIdx] {
@@ -345,19 +365,21 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 		case MessagePatternE:
 			e, err := s.ss.cs.GenerateKeypair(s.rng)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, err
 			}
 			s.e = e
-			out = append(out, s.e.Public...)
+			out.WriteEPublic(s.e.Public)
 			s.ss.MixHash(s.e.Public)
 			if len(s.psk) > 0 {
 				s.ss.MixKey(s.e.Public)
 			}
 		case MessagePatternS:
 			if len(s.s.Public) == 0 {
-				return nil, nil, nil, errors.New("noise: invalid state, s.Public is nil")
+				return nil, nil, errors.New("noise: invalid state, s.Public is nil")
 			}
-			out = s.ss.EncryptAndHash(out, s.s.Public)
+			var encryptedSPublic []byte
+			encryptedSPublic = s.ss.EncryptAndHash(encryptedSPublic, s.s.Public)
+			out.WriteEncryptedSPublic(encryptedSPublic)
 		case MessagePatternDHEE:
 			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.re))
 		case MessagePatternDHES:
@@ -380,14 +402,16 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 	}
 	s.shouldWrite = false
 	s.msgIdx++
-	out = s.ss.EncryptAndHash(out, payload)
+	var encryptedPayload []byte
+	encryptedPayload = s.ss.EncryptAndHash(encryptedPayload, payload)
+	out.WriteEncryptedPayload(encryptedPayload)
 
 	if s.msgIdx >= len(s.messagePatterns) {
 		cs1, cs2 := s.ss.Split()
-		return out, cs1, cs2, nil
+		return cs1, cs2, nil
 	}
 
-	return out, nil, nil, nil
+	return nil, nil, nil
 }
 
 // ErrShortMessage is returned by ReadMessage if a message is not as long as it should be.
@@ -398,7 +422,7 @@ var ErrShortMessage = errors.New("noise: message is too short")
 // will be returned, one is used for encryption of messages to the remote peer,
 // the other is used for decryption of messages from the remote peer. It is an
 // error to call this method out of sync with the handshake pattern.
-func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState, *CipherState, error) {
+func (s *HandshakeState) ReadMessage(out []byte, message ReadableHandshakeMessage) ([]byte, *CipherState, *CipherState, error) {
 	if s.shouldWrite {
 		return nil, nil, nil, errors.New("noise: unexpected call to ReadMessage should be WriteMessage")
 	}
@@ -416,7 +440,7 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 			if msg == MessagePatternS && s.ss.hasK {
 				expected += 16
 			}
-			if len(message) < expected {
+			if message.Length() < expected {
 				return nil, nil, nil, ErrShortMessage
 			}
 			switch msg {
@@ -425,7 +449,10 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 					s.re = make([]byte, s.ss.cs.DHLen())
 				}
 				s.re = s.re[:s.ss.cs.DHLen()]
-				copy(s.re, message)
+				s.re, err = message.ReadEPublic()
+				if err != nil {
+					return nil, nil, nil, err
+				}
 				s.ss.MixHash(s.re)
 				if len(s.psk) > 0 {
 					s.ss.MixKey(s.re)
@@ -434,13 +461,18 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 				if len(s.rs) > 0 {
 					return nil, nil, nil, errors.New("noise: invalid state, rs is not nil")
 				}
-				s.rs, err = s.ss.DecryptAndHash(s.rs[:0], message[:expected])
+				rs, err := message.ReadEncryptedSPublic()
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				s.rs, err = s.ss.DecryptAndHash(s.rs[:0], rs)
 			}
 			if err != nil {
 				s.ss.Rollback()
 				return nil, nil, nil, err
 			}
-			message = message[expected:]
+			// FIXME probably we need to remove
+			//message = message[expected:]
 		case MessagePatternDHEE:
 			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.re))
 		case MessagePatternDHES:
@@ -461,7 +493,7 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 			s.ss.MixKeyAndHash(s.psk)
 		}
 	}
-	out, err = s.ss.DecryptAndHash(out, message)
+	out, err = s.ss.DecryptAndHash(out, message.ReadPayload())
 	if err != nil {
 		s.ss.Rollback()
 		return nil, nil, nil, err
