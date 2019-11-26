@@ -1,15 +1,19 @@
 package noise
 
+// Identity is an interface which provides the public key of a static identity to the HandshakeState
 type Identity interface {
 	PublicKey() []byte
 	Bytes() []byte
 }
 
+// PrivateIdentity is an Identity with access to the private key
 type PrivateIdentity interface {
 	Identity
 	PrivateKey() []byte
 }
 
+// ReadableHandshakeMessage provides the HandshakeState the possibility to digest handshake messages in other
+// formats than simple concatenated byte slices
 type ReadableHandshakeMessage interface {
 	ReadEPublic() ([]byte, error)
 	ReadEncryptedIdentity() ([]byte, error)
@@ -18,6 +22,7 @@ type ReadableHandshakeMessage interface {
 	Length() int
 }
 
+// WriteableHandshakeMessage takes data from the HandshakeState to marshal it to a custom format.
 type WriteableHandshakeMessage interface {
 	WriteEPublic(e []byte)
 	WriteEncryptedIdentity(s []byte)
