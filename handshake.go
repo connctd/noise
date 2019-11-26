@@ -2,6 +2,12 @@ package noise
 
 type Identity interface {
 	PublicKey() []byte
+	Bytes() []byte
+}
+
+type PrivateIdentity interface {
+	Identity
+	PrivateKey() []byte
 }
 
 type ReadableHandshakeMessage interface {
@@ -14,7 +20,7 @@ type ReadableHandshakeMessage interface {
 
 type WriteableHandshakeMessage interface {
 	WriteEPublic(e []byte)
-	WriteEncryptedSPublic(s []byte)
+	WriteEncryptedIdentity(s []byte)
 	WriteEncryptedPayload(p []byte)
 }
 
@@ -36,7 +42,7 @@ func (s *SimplePayload) WriteEPublic(e []byte) {
 	s.epublic = e
 }
 
-func (p *SimplePayload) WriteEncryptedSPublic(s []byte) {
+func (p *SimplePayload) WriteEncryptedIdentity(s []byte) {
 	p.encryptedIdentity = s
 }
 
@@ -75,4 +81,16 @@ type SimpleIdentity struct {
 
 func (s *SimpleIdentity) PublicKey() []byte {
 	return s.PubKey
+}
+
+func (d DHKey) PublicKey() []byte {
+	return d.Public
+}
+
+func (d DHKey) PrivateKey() []byte {
+	return d.Private
+}
+
+func (d DHKey) Bytes() []byte {
+	return d.Public
 }

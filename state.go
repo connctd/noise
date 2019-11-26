@@ -230,11 +230,11 @@ type IdentityMarshaller interface {
 // after the handshake is complete.
 type HandshakeState struct {
 	ss                 symmetricState
-	s                  DHKey  // local static keypair
-	e                  DHKey  // local ephemeral keypair
-	rs                 []byte // remote party's static public key
-	re                 []byte // remote party's ephemeral public key
-	psk                []byte // preshared key, maybe zero length
+	s                  PrivateIdentity // local static keypair
+	e                  DHKey           // local ephemeral keypair
+	rs                 []byte          // remote party's static public key
+	re                 []byte          // remote party's ephemeral public key
+	psk                []byte          // preshared key, maybe zero length
 	messagePatterns    [][]MessagePattern
 	shouldWrite        bool
 	initiator          bool
@@ -273,7 +273,7 @@ type Config struct {
 
 	// StaticKeypair is this peer's static keypair, required if part of the
 	// handshake.
-	StaticKeypair DHKey
+	StaticKeypair PrivateIdentity
 
 	// EphemeralKeypair is this peer's ephemeral keypair that was provided as
 	// a pre-message in the handshake.
@@ -326,7 +326,7 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 	for _, m := range c.Pattern.InitiatorPreMessages {
 		switch {
 		case c.Initiator && m == MessagePatternS:
-			hs.ss.MixHash(hs.s.Public)
+			hs.ss.MixHash(hs.s.PublicKey())
 		case c.Initiator && m == MessagePatternE:
 			hs.ss.MixHash(hs.e.Public)
 		case !c.Initiator && m == MessagePatternS:
@@ -338,7 +338,7 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 	for _, m := range c.Pattern.ResponderPreMessages {
 		switch {
 		case !c.Initiator && m == MessagePatternS:
-			hs.ss.MixHash(hs.s.Public)
+			hs.ss.MixHash(hs.s.PublicKey())
 		case !c.Initiator && m == MessagePatternE:
 			hs.ss.MixHash(hs.e.Public)
 		case c.Initiator && m == MessagePatternS:
@@ -381,28 +381,28 @@ func (s *HandshakeState) WriteMessage(out WriteableHandshakeMessage, payload []b
 				s.ss.MixKey(s.e.Public)
 			}
 		case MessagePatternS:
-			if len(s.s.Public) == 0 {
+			if len(s.s.PublicKey()) == 0 {
 				return nil, nil, errors.New("noise: invalid state, s.Public is nil")
 			}
 			var encryptedSPublic []byte
-			encryptedSPublic = s.ss.EncryptAndHash(encryptedSPublic, s.s.Public)
-			out.WriteEncryptedSPublic(encryptedSPublic)
+			encryptedSPublic = s.ss.EncryptAndHash(encryptedSPublic, s.s.Bytes())
+			out.WriteEncryptedIdentity(encryptedSPublic)
 		case MessagePatternDHEE:
 			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.re))
 		case MessagePatternDHES:
 			if s.initiator {
 				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
 			} else {
-				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+				s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.re))
 			}
 		case MessagePatternDHSE:
 			if s.initiator {
-				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+				s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.re))
 			} else {
 				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
 			}
 		case MessagePatternDHSS:
-			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
+			s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.rs))
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
 		}
@@ -496,16 +496,16 @@ func (s *HandshakeState) ReadMessage(out []byte, message ReadableHandshakeMessag
 			if s.initiator {
 				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
 			} else {
-				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+				s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.re))
 			}
 		case MessagePatternDHSE:
 			if s.initiator {
-				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+				s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.re))
 			} else {
 				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
 			}
 		case MessagePatternDHSS:
-			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
+			s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.rs))
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
 		}
