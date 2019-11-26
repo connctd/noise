@@ -1,8 +1,13 @@
 package noise
 
+type Identity interface {
+	PublicKey() []byte
+}
+
 type ReadableHandshakeMessage interface {
 	ReadEPublic() ([]byte, error)
-	ReadEncryptedSPublic() ([]byte, error)
+	ReadEncryptedIdentity() ([]byte, error)
+	SetUnmarshalledIdentity(identity Identity)
 	ReadPayload() []byte
 	Length() int
 }
@@ -14,13 +19,15 @@ type WriteableHandshakeMessage interface {
 }
 
 type SimplePayload struct {
-	epublic  []byte
-	espublic []byte
-	payload  []byte
+	epublic           []byte
+	encryptedIdentity []byte
+	payload           []byte
+
+	identity Identity
 }
 
 func (s *SimplePayload) Reset() {
-	s.espublic = []byte{}
+	s.encryptedIdentity = []byte{}
 	s.epublic = []byte{}
 	s.payload = []byte{}
 }
@@ -30,7 +37,7 @@ func (s *SimplePayload) WriteEPublic(e []byte) {
 }
 
 func (p *SimplePayload) WriteEncryptedSPublic(s []byte) {
-	p.espublic = s
+	p.encryptedIdentity = s
 }
 
 func (s *SimplePayload) WriteEncryptedPayload(p []byte) {
@@ -41,8 +48,12 @@ func (s *SimplePayload) ReadEPublic() ([]byte, error) {
 	return s.epublic, nil
 }
 
-func (s *SimplePayload) ReadEncryptedSPublic() ([]byte, error) {
-	return s.espublic, nil
+func (s *SimplePayload) ReadEncryptedIdentity() ([]byte, error) {
+	return s.encryptedIdentity, nil
+}
+
+func (s *SimplePayload) SetUnmarshalledIdentity(identity Identity) {
+	s.identity = identity
 }
 
 func (s *SimplePayload) ReadPayload() []byte {
@@ -50,10 +61,18 @@ func (s *SimplePayload) ReadPayload() []byte {
 }
 
 func (s *SimplePayload) Serialize() []byte {
-	t := append(s.epublic, s.espublic...)
+	t := append(s.epublic, s.encryptedIdentity...)
 	return append(t, s.payload...)
 }
 
 func (s *SimplePayload) Length() int {
 	return len(s.Serialize())
+}
+
+type SimpleIdentity struct {
+	PubKey []byte
+}
+
+func (s *SimpleIdentity) PublicKey() []byte {
+	return s.PubKey
 }

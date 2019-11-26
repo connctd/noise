@@ -220,20 +220,27 @@ const (
 // message.
 const MaxMsgLen = 65535
 
+type IdentityMarshaller interface {
+	UnmarshallRemoteStaticKey(identityBytes []byte) (Identity, error)
+
+	MarshallRemoteIdentity(identity Identity) ([]byte, error)
+}
+
 // A HandshakeState tracks the state of a Noise handshake. It may be discarded
 // after the handshake is complete.
 type HandshakeState struct {
-	ss              symmetricState
-	s               DHKey  // local static keypair
-	e               DHKey  // local ephemeral keypair
-	rs              []byte // remote party's static public key
-	re              []byte // remote party's ephemeral public key
-	psk             []byte // preshared key, maybe zero length
-	messagePatterns [][]MessagePattern
-	shouldWrite     bool
-	initiator       bool
-	msgIdx          int
-	rng             io.Reader
+	ss                 symmetricState
+	s                  DHKey  // local static keypair
+	e                  DHKey  // local ephemeral keypair
+	rs                 []byte // remote party's static public key
+	re                 []byte // remote party's ephemeral public key
+	psk                []byte // preshared key, maybe zero length
+	messagePatterns    [][]MessagePattern
+	shouldWrite        bool
+	initiator          bool
+	msgIdx             int
+	rng                io.Reader
+	identityMarshaller IdentityMarshaller
 }
 
 // A Config provides the details necessary to process a Noise handshake. It is
@@ -461,11 +468,21 @@ func (s *HandshakeState) ReadMessage(out []byte, message ReadableHandshakeMessag
 				if len(s.rs) > 0 {
 					return nil, nil, nil, errors.New("noise: invalid state, rs is not nil")
 				}
-				rs, err := message.ReadEncryptedSPublic()
+				idBytes, err := message.ReadEncryptedIdentity()
 				if err != nil {
 					return nil, nil, nil, err
 				}
-				s.rs, err = s.ss.DecryptAndHash(s.rs[:0], rs)
+				var decryptedS []byte
+				decryptedS, err = s.ss.DecryptAndHash(decryptedS, idBytes)
+				if s.identityMarshaller != nil {
+					identity, err := s.identityMarshaller.UnmarshallRemoteStaticKey(decryptedS)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					message.SetUnmarshalledIdentity(identity)
+				} else {
+					s.rs = decryptedS
+				}
 			}
 			if err != nil {
 				s.ss.Rollback()
