@@ -1,9 +1,10 @@
 package noise
 
+import "fmt"
+
 // Identity is an interface which provides the public key of a static identity to the HandshakeState
 type Identity interface {
 	PublicKey() []byte
-	Bytes() []byte
 }
 
 // PrivateIdentity is an Identity with access to the private key
@@ -17,7 +18,6 @@ type PrivateIdentity interface {
 type ReadableHandshakeMessage interface {
 	ReadEPublic() ([]byte, error)
 	ReadEncryptedIdentity() ([]byte, error)
-	SetUnmarshalledIdentity(identity Identity)
 	ReadPayload() []byte
 	Length() int
 }
@@ -96,6 +96,20 @@ func (d DHKey) PrivateKey() []byte {
 	return d.Private
 }
 
-func (d DHKey) Bytes() []byte {
-	return d.Public
+type simpleIdentityMarshaller struct{}
+
+func (s simpleIdentityMarshaller) MarshallIdentity(identity Identity) ([]byte, error) {
+	if simpleId, ok := identity.(*SimpleIdentity); !ok {
+		return nil, fmt.Errorf("Invalid/incompatible type of identity: %T", identity)
+	} else {
+		return simpleId.PublicKey(), nil
+	}
+}
+
+func (s simpleIdentityMarshaller) UnmarshallIdentity(identityBytes []byte) (Identity, error) {
+	simpleId := &SimpleIdentity{
+		PubKey: make([]byte, len(identityBytes)),
+	}
+	copy(simpleId.PubKey, identityBytes)
+	return simpleId, nil
 }

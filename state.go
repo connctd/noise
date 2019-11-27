@@ -223,9 +223,9 @@ const MaxMsgLen = 65535
 // IdentityMarshaller provides the HandshakeState with the abillity to marshal und unmarshal identities
 // from byte slices, enabling the use of certificates instead of plain public keys
 type IdentityMarshaller interface {
-	UnmarshallRemoteStaticKey(identityBytes []byte) (Identity, error)
+	UnmarshallIdentity(identityBytes []byte) (Identity, error)
 
-	MarshallRemoteIdentity(identity Identity) ([]byte, error)
+	MarshallIdentity(identity Identity) ([]byte, error)
 }
 
 // A HandshakeState tracks the state of a Noise handshake. It may be discarded
@@ -234,7 +234,7 @@ type HandshakeState struct {
 	ss                 symmetricState
 	s                  PrivateIdentity // local static keypair
 	e                  DHKey           // local ephemeral keypair
-	rs                 []byte          // remote party's static public key
+	rs                 Identity        // remote party's static public key
 	re                 []byte          // remote party's ephemeral public key
 	psk                []byte          // preshared key, maybe zero length
 	messagePatterns    [][]MessagePattern
@@ -283,24 +283,32 @@ type Config struct {
 
 	// PeerStatic is the static public key of the remote peer that was provided
 	// as a pre-message in the handshake.
-	PeerStatic []byte
+	PeerStatic Identity
 
 	// PeerEphemeral is the ephemeral public key of the remote peer that was
 	// provided as a pre-message in the handshake.
 	PeerEphemeral []byte
+
+	// IdMarshaller allows to use more complex IDs than plain public keys, i.e. certificates
+	IdMarshaller IdentityMarshaller
 }
 
 // NewHandshakeState starts a new handshake using the provided configuration.
 func NewHandshakeState(c Config) (*HandshakeState, error) {
 	hs := &HandshakeState{
-		s:               c.StaticKeypair,
-		e:               c.EphemeralKeypair,
-		rs:              c.PeerStatic,
-		psk:             c.PresharedKey,
-		messagePatterns: c.Pattern.Messages,
-		shouldWrite:     c.Initiator,
-		initiator:       c.Initiator,
-		rng:             c.Random,
+		s:                  c.StaticKeypair,
+		e:                  c.EphemeralKeypair,
+		rs:                 c.PeerStatic,
+		psk:                c.PresharedKey,
+		messagePatterns:    c.Pattern.Messages,
+		shouldWrite:        c.Initiator,
+		initiator:          c.Initiator,
+		rng:                c.Random,
+		identityMarshaller: c.IdMarshaller,
+	}
+	if hs.identityMarshaller == nil {
+		// Assume that the usual plain public keys are used
+		hs.identityMarshaller = simpleIdentityMarshaller{}
 	}
 	if hs.rng == nil {
 		hs.rng = rand.Reader
@@ -332,7 +340,7 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 		case c.Initiator && m == MessagePatternE:
 			hs.ss.MixHash(hs.e.Public)
 		case !c.Initiator && m == MessagePatternS:
-			hs.ss.MixHash(hs.rs)
+			hs.ss.MixHash(hs.rs.PublicKey())
 		case !c.Initiator && m == MessagePatternE:
 			hs.ss.MixHash(hs.re)
 		}
@@ -344,7 +352,7 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 		case !c.Initiator && m == MessagePatternE:
 			hs.ss.MixHash(hs.e.Public)
 		case c.Initiator && m == MessagePatternS:
-			hs.ss.MixHash(hs.rs)
+			hs.ss.MixHash(hs.rs.PublicKey())
 		case c.Initiator && m == MessagePatternE:
 			hs.ss.MixHash(hs.re)
 		}
@@ -386,14 +394,18 @@ func (s *HandshakeState) WriteMessage(out WriteableHandshakeMessage, payload []b
 			if len(s.s.PublicKey()) == 0 {
 				return nil, nil, errors.New("noise: invalid state, s.Public is nil")
 			}
+			idBytes, err := s.identityMarshaller.MarshallIdentity(s.s)
+			if err != nil {
+				fmt.Errorf("Unable to marshal static identity: %w", err)
+			}
 			var encryptedSPublic []byte
-			encryptedSPublic = s.ss.EncryptAndHash(encryptedSPublic, s.s.Bytes())
+			encryptedSPublic = s.ss.EncryptAndHash(encryptedSPublic, idBytes)
 			out.WriteEncryptedIdentity(encryptedSPublic)
 		case MessagePatternDHEE:
 			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.re))
 		case MessagePatternDHES:
 			if s.initiator {
-				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs.PublicKey()))
 			} else {
 				s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.re))
 			}
@@ -401,10 +413,10 @@ func (s *HandshakeState) WriteMessage(out WriteableHandshakeMessage, payload []b
 			if s.initiator {
 				s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.re))
 			} else {
-				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs.PublicKey()))
 			}
 		case MessagePatternDHSS:
-			s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.rs))
+			s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.rs.PublicKey()))
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
 		}
@@ -467,24 +479,23 @@ func (s *HandshakeState) ReadMessage(out []byte, message ReadableHandshakeMessag
 					s.ss.MixKey(s.re)
 				}
 			case MessagePatternS:
-				if len(s.rs) > 0 {
+				if s.rs != nil {
 					return nil, nil, nil, errors.New("noise: invalid state, rs is not nil")
 				}
 				idBytes, err := message.ReadEncryptedIdentity()
 				if err != nil {
 					return nil, nil, nil, err
 				}
-				var decryptedS []byte
-				decryptedS, err = s.ss.DecryptAndHash(decryptedS, idBytes)
-				if s.identityMarshaller != nil {
-					identity, err := s.identityMarshaller.UnmarshallRemoteStaticKey(decryptedS)
-					if err != nil {
-						return nil, nil, nil, err
-					}
-					message.SetUnmarshalledIdentity(identity)
-				} else {
-					s.rs = decryptedS
+				var decryptedRawIdentity []byte
+				decryptedRawIdentity, err = s.ss.DecryptAndHash(decryptedRawIdentity, idBytes)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("Failed to decrypt remote identity: %w", err)
 				}
+				identity, err := s.identityMarshaller.UnmarshallIdentity(decryptedRawIdentity)
+				if err != nil {
+					return nil, nil, nil, fmt.Errorf("Failed to unmarshal remote identity: %w", err)
+				}
+				s.rs = identity
 			}
 			if err != nil {
 				s.ss.Rollback()
@@ -496,7 +507,7 @@ func (s *HandshakeState) ReadMessage(out []byte, message ReadableHandshakeMessag
 			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.re))
 		case MessagePatternDHES:
 			if s.initiator {
-				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs.PublicKey()))
 			} else {
 				s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.re))
 			}
@@ -504,10 +515,10 @@ func (s *HandshakeState) ReadMessage(out []byte, message ReadableHandshakeMessag
 			if s.initiator {
 				s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.re))
 			} else {
-				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs.PublicKey()))
 			}
 		case MessagePatternDHSS:
-			s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.rs))
+			s.ss.MixKey(s.ss.cs.DH(s.s.PrivateKey(), s.rs.PublicKey()))
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
 		}
@@ -538,7 +549,7 @@ func (s *HandshakeState) ChannelBinding() []byte {
 // PeerStatic returns the static key provided by the remote peer during
 // a handshake. It is an error to call this method if a handshake message
 // containing a static key has not been read.
-func (s *HandshakeState) PeerStatic() []byte {
+func (s *HandshakeState) PeerIdentity() Identity {
 	return s.rs
 }
 
