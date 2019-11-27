@@ -396,7 +396,7 @@ func (s *HandshakeState) WriteMessage(out WriteableHandshakeMessage, payload []b
 			}
 			idBytes, err := s.identityMarshaller.MarshallIdentity(s.s)
 			if err != nil {
-				fmt.Errorf("Unable to marshal static identity: %w", err)
+				return nil, nil, fmt.Errorf("Unable to marshal static identity: %w", err)
 			}
 			var encryptedSPublic []byte
 			encryptedSPublic = s.ss.EncryptAndHash(encryptedSPublic, idBytes)
@@ -526,7 +526,7 @@ func (s *HandshakeState) ReadMessage(out []byte, message ReadableHandshakeMessag
 	out, err = s.ss.DecryptAndHash(out, message.ReadPayload())
 	if err != nil {
 		s.ss.Rollback()
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("Failed to decrypt payload: %w", err)
 	}
 	s.shouldWrite = true
 	s.msgIdx++
