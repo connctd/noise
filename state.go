@@ -220,29 +220,29 @@ const (
 // message.
 const MaxMsgLen = 65535
 
-// IdentityMarshaller provides the HandshakeState with the abillity to marshal und unmarshal identities
+// IdentityMarshaller provides the HandshakeState with the ability to marshal und unmarshal identities
 // from byte slices, enabling the use of certificates instead of plain public keys
-type IdentityMarshaller interface {
-	UnmarshallIdentity(identityBytes []byte) (Identity, error)
+type IdentityMarshaler interface {
+	UnmarshalIdentity(identityBytes []byte) (Identity, error)
 
-	MarshallIdentity(identity Identity) ([]byte, error)
+	MarshalIdentity(identity Identity) ([]byte, error)
 }
 
 // A HandshakeState tracks the state of a Noise handshake. It may be discarded
 // after the handshake is complete.
 type HandshakeState struct {
-	ss                 symmetricState
-	s                  PrivateIdentity // local static keypair
-	e                  DHKey           // local ephemeral keypair
-	rs                 Identity        // remote party's static public key
-	re                 []byte          // remote party's ephemeral public key
-	psk                []byte          // preshared key, maybe zero length
-	messagePatterns    [][]MessagePattern
-	shouldWrite        bool
-	initiator          bool
-	msgIdx             int
-	rng                io.Reader
-	identityMarshaller IdentityMarshaller
+	ss                symmetricState
+	s                 PrivateIdentity // local static keypair
+	e                 DHKey           // local ephemeral keypair
+	rs                Identity        // remote party's static public key
+	re                []byte          // remote party's ephemeral public key
+	psk               []byte          // preshared key, maybe zero length
+	messagePatterns   [][]MessagePattern
+	shouldWrite       bool
+	initiator         bool
+	msgIdx            int
+	rng               io.Reader
+	identityMarshaler IdentityMarshaler
 }
 
 // A Config provides the details necessary to process a Noise handshake. It is
@@ -289,26 +289,27 @@ type Config struct {
 	// provided as a pre-message in the handshake.
 	PeerEphemeral []byte
 
-	// IdMarshaller allows to use more complex IDs than plain public keys, i.e. certificates
-	IdMarshaller IdentityMarshaller
+	// IdMarshaller allows you to use more complex IDs than plain public keys, i.e. certificates.
+	// This parameter is optional.
+	IDMarshaler IdentityMarshaler
 }
 
 // NewHandshakeState starts a new handshake using the provided configuration.
 func NewHandshakeState(c Config) (*HandshakeState, error) {
 	hs := &HandshakeState{
-		s:                  c.StaticKeypair,
-		e:                  c.EphemeralKeypair,
-		rs:                 c.PeerStatic,
-		psk:                c.PresharedKey,
-		messagePatterns:    c.Pattern.Messages,
-		shouldWrite:        c.Initiator,
-		initiator:          c.Initiator,
-		rng:                c.Random,
-		identityMarshaller: c.IdMarshaller,
+		s:                 c.StaticKeypair,
+		e:                 c.EphemeralKeypair,
+		rs:                c.PeerStatic,
+		psk:               c.PresharedKey,
+		messagePatterns:   c.Pattern.Messages,
+		shouldWrite:       c.Initiator,
+		initiator:         c.Initiator,
+		rng:               c.Random,
+		identityMarshaler: c.IDMarshaler,
 	}
-	if hs.identityMarshaller == nil {
+	if hs.identityMarshaler == nil {
 		// Assume that the usual plain public keys are used
-		hs.identityMarshaller = simpleIdentityMarshaller{}
+		hs.identityMarshaler = simpleIdentityMarshaler{}
 	}
 	if hs.rng == nil {
 		hs.rng = rand.Reader
@@ -394,7 +395,7 @@ func (s *HandshakeState) WriteMessage(out WriteableHandshakeMessage, payload []b
 			if len(s.s.PublicKey()) == 0 {
 				return nil, nil, errors.New("noise: invalid state, s.Public is nil")
 			}
-			idBytes, err := s.identityMarshaller.MarshallIdentity(s.s)
+			idBytes, err := s.identityMarshaler.MarshalIdentity(s.s)
 			if err != nil {
 				return nil, nil, fmt.Errorf("Unable to marshal static identity: %w", err)
 			}
@@ -491,7 +492,7 @@ func (s *HandshakeState) ReadMessage(out []byte, message ReadableHandshakeMessag
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("Failed to decrypt remote identity: %w", err)
 				}
-				identity, err := s.identityMarshaller.UnmarshallIdentity(decryptedRawIdentity)
+				identity, err := s.identityMarshaler.UnmarshalIdentity(decryptedRawIdentity)
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("Failed to unmarshal remote identity: %w", err)
 				}
@@ -546,9 +547,9 @@ func (s *HandshakeState) ChannelBinding() []byte {
 	return s.ss.h
 }
 
-// PeerStatic returns the static key provided by the remote peer during
-// a handshake. It is an error to call this method if a handshake message
-// containing a static key has not been read.
+// PeerIdentity returns the static identity provided by the remote peer
+// during a handshake. It is an error to call this method if a handshake message
+// containing the static identity has not been read.
 func (s *HandshakeState) PeerIdentity() Identity {
 	return s.rs
 }
