@@ -9,8 +9,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/stretchr/testify/assert"
 )
 
 func mustHex(s []byte) []byte {
@@ -98,9 +99,9 @@ func init() {
 	}
 }
 
-func (NoiseSuite) TestVectors(c *C) {
+func TestVectors(t *testing.T) {
 	f, err := os.Open("vectors.txt")
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 	r := bufio.NewReader(f)
 
 	var hsI, hsR *HandshakeState
@@ -116,14 +117,14 @@ func (NoiseSuite) TestVectors(c *C) {
 		if err == io.EOF {
 			break
 		}
-		c.Assert(err, IsNil)
+		assert.NoError(t, err)
 
 		if len(bytes.TrimSpace(line)) == 0 || line[0] == '#' {
 			continue
 		}
 
 		splitLine := bytes.SplitN(line, []byte("="), 2)
-		c.Assert(splitLine, HasLen, 2)
+		assert.Len(t, splitLine, 2)
 
 		switch string(splitLine[0]) {
 		case "init_static":
@@ -134,7 +135,8 @@ func (NoiseSuite) TestVectors(c *C) {
 			ephR, _ = DH25519.GenerateKeypair(hexReader(splitLine[1]))
 		case "handshake":
 			name = string(splitLine[1])
-			c.Log(name)
+			//c.Log(name)
+			fmt.Printf("Name: %s\n", name)
 			configI, configR = Config{Initiator: true}, Config{}
 			hsI, hsR = nil, nil
 			components := strings.SplitN(name, "_", 5)
@@ -175,10 +177,10 @@ func (NoiseSuite) TestVectors(c *C) {
 				configR.StaticKeypair = staticR
 			}
 			if keyInfo.isr {
-				configR.PeerStatic = staticI.Public
+				configR.PeerStatic = &SimpleIdentity{staticI.Public}
 			}
 			if keyInfo.rsi {
-				configI.PeerStatic = staticR.Public
+				configI.PeerStatic = &SimpleIdentity{staticR.Public}
 			}
 			if keyInfo.e {
 				configR.EphemeralKeypair = ephR
@@ -200,10 +202,10 @@ func (NoiseSuite) TestVectors(c *C) {
 				enc, dec = csW1, csR1
 			}
 			encrypted := enc.Encrypt(nil, nil, payload)
-			c.Assert(fmt.Sprintf("%x", encrypted), Equals, string(splitLine[1]))
+			assert.Equal(t, fmt.Sprintf("%x", encrypted), string(splitLine[1]))
 			decrypted, err := dec.Decrypt(nil, nil, encrypted)
-			c.Assert(err, IsNil)
-			c.Assert(string(payload), Equals, string(decrypted))
+			assert.NoError(t, err)
+			assert.Equal(t, string(payload), string(decrypted))
 			payload = nil
 			continue
 		}
@@ -216,10 +218,10 @@ func (NoiseSuite) TestVectors(c *C) {
 		var res []byte
 		out := &SimplePayload{}
 		csW0, csW1, _ = writer.WriteMessage(out, payload)
-		c.Assert(fmt.Sprintf("%x", out.Serialize()), Equals, string(splitLine[1]))
+		assert.Equal(t, fmt.Sprintf("%x", out.Serialize()), string(splitLine[1]))
 		res, csR0, csR1, err = reader.ReadMessage(nil, out)
-		c.Assert(err, IsNil)
-		c.Assert(string(res), Equals, string(payload))
+		assert.NoError(t, err)
+		assert.Equal(t, string(res), string(payload))
 		payload = nil
 	}
 }
