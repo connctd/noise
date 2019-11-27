@@ -1,6 +1,6 @@
 package noise
 
-import "fmt"
+import "errors"
 
 // Identity is an interface which provides the public key of a static identity to the HandshakeState
 type Identity interface {
@@ -33,8 +33,6 @@ type SimplePayload struct {
 	epublic           []byte
 	encryptedIdentity []byte
 	payload           []byte
-
-	identity Identity
 }
 
 func (s *SimplePayload) Reset() {
@@ -44,15 +42,18 @@ func (s *SimplePayload) Reset() {
 }
 
 func (s *SimplePayload) WriteEPublic(e []byte) {
-	s.epublic = e
+	s.epublic = make([]byte, len(e))
+	copy(s.epublic, e)
 }
 
-func (p *SimplePayload) WriteEncryptedIdentity(s []byte) {
-	p.encryptedIdentity = s
+func (s *SimplePayload) WriteEncryptedIdentity(sr []byte) {
+	s.encryptedIdentity = make([]byte, len(sr))
+	copy(s.encryptedIdentity, sr)
 }
 
 func (s *SimplePayload) WriteEncryptedPayload(p []byte) {
-	s.payload = p
+	s.payload = make([]byte, len(p))
+	copy(s.payload, p)
 }
 
 func (s *SimplePayload) ReadEPublic() ([]byte, error) {
@@ -61,10 +62,6 @@ func (s *SimplePayload) ReadEPublic() ([]byte, error) {
 
 func (s *SimplePayload) ReadEncryptedIdentity() ([]byte, error) {
 	return s.encryptedIdentity, nil
-}
-
-func (s *SimplePayload) SetUnmarshalledIdentity(identity Identity) {
-	s.identity = identity
 }
 
 func (s *SimplePayload) ReadPayload() []byte {
@@ -99,17 +96,18 @@ func (d DHKey) PrivateKey() []byte {
 type simpleIdentityMarshaller struct{}
 
 func (s simpleIdentityMarshaller) MarshallIdentity(identity Identity) ([]byte, error) {
-	if simpleId, ok := identity.(*SimpleIdentity); !ok {
-		return nil, fmt.Errorf("Invalid/incompatible type of identity: %T", identity)
-	} else {
-		return simpleId.PublicKey(), nil
+	if len(identity.PublicKey()) == 0 {
+		return nil, errors.New("Invalid identity with public key length of 0")
 	}
+	rawID := make([]byte, len(identity.PublicKey()))
+	copy(rawID, identity.PublicKey())
+	return rawID, nil
 }
 
 func (s simpleIdentityMarshaller) UnmarshallIdentity(identityBytes []byte) (Identity, error) {
-	simpleId := &SimpleIdentity{
+	simpleID := &SimpleIdentity{
 		PubKey: make([]byte, len(identityBytes)),
 	}
-	copy(simpleId.PubKey, identityBytes)
-	return simpleId, nil
+	copy(simpleID.PubKey, identityBytes)
+	return simpleID, nil
 }
