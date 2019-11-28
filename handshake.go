@@ -1,24 +1,5 @@
 package noise
 
-import "errors"
-
-// Identity is an interface which provides the public key of a static identity to the HandshakeState
-type Identity interface {
-	PublicKey() []byte
-}
-
-// PrivateIdentity is an Identity with access to the private key
-type PrivateIdentity interface {
-	Identity
-	PrivateKey() []byte
-}
-
-// IdentityVerifier can be used by a HandshakeState to verify the remote identity fulfills certain
-// criteria (i.e. signed by common authority etc.)
-type IdentityVerifier interface {
-	VerifyIdentity(id Identity) error
-}
-
 // ReadableHandshakeMessage provides the HandshakeState the possibility to digest handshake messages in other
 // formats than simple concatenated byte slices
 type ReadableHandshakeMessage interface {
@@ -92,45 +73,4 @@ func (s *SimplePayload) Serialize() []byte {
 // Length gives you the total length of this message
 func (s *SimplePayload) Length() int {
 	return len(s.Serialize())
-}
-
-// SimpleIdentity gives the possibility to simply use plain public keys as identity,
-// similar to the original behavior
-type SimpleIdentity struct {
-	// PubKey is the static public key
-	PubKey []byte
-}
-
-// PublicKey gives you the static public key of this identity
-func (s *SimpleIdentity) PublicKey() []byte {
-	return s.PubKey
-}
-
-// PublicKey gives you the static public key of DHKey which is used as PrivateIdentity here
-func (d DHKey) PublicKey() []byte {
-	return d.Public
-}
-
-// PrivateKey returns the private key part of DHKey
-func (d DHKey) PrivateKey() []byte {
-	return d.Private
-}
-
-type simpleIdentityMarshaler struct{}
-
-func (s simpleIdentityMarshaler) MarshalIdentity(identity Identity) ([]byte, error) {
-	if len(identity.PublicKey()) == 0 {
-		return nil, errors.New("Invalid identity with public key length of 0")
-	}
-	rawID := make([]byte, len(identity.PublicKey()))
-	copy(rawID, identity.PublicKey())
-	return rawID, nil
-}
-
-func (s simpleIdentityMarshaler) UnmarshalIdentity(identityBytes []byte) (Identity, error) {
-	simpleID := &SimpleIdentity{
-		PubKey: make([]byte, len(identityBytes)),
-	}
-	copy(simpleID.PubKey, identityBytes)
-	return simpleID, nil
 }
