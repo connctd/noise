@@ -29,7 +29,7 @@ func TestN(t *testing.T) {
 		PeerStatic:  &SimpleIdentity{staticR.Public},
 	})
 
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 
 	hs.WriteMessage(out, nil)
 	expected, _ := hex.DecodeString("358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd1662548331a3d1e93b490263abc7a4633867f4")
@@ -50,7 +50,7 @@ func TestX(t *testing.T) {
 		PeerStatic:    &SimpleIdentity{staticR.Public},
 	})
 
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	hs.WriteMessage(out, nil)
 	expected, _ := hex.DecodeString("79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51ad203cd28d81cf65a2da637f557a05728b3ae4abdc3a42d1cda5f719d6cf41d7f2cf1b1c5af10e38a09a9bb7e3b1d589a99492cc50293eaa1f3f391b59bb6990d")
 	assert.EqualValues(t, expected, out.Serialize())
@@ -75,7 +75,7 @@ func TestNN(t *testing.T) {
 		Initiator:   false,
 	})
 
-	in := &SimplePayload{}
+	in := &SimpleMessage{}
 	hsI.WriteMessage(in, []byte("abc"))
 	assert.Len(t, in.Serialize(), 35)
 	var res []byte
@@ -116,7 +116,7 @@ func TestXX(t *testing.T) {
 		Pattern:       HandshakeXX,
 		StaticKeypair: staticR,
 	})
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	hsI.WriteMessage(out, []byte("abc"))
 	assert.Len(t, out.Serialize(), 35)
 	var payload []byte
@@ -167,7 +167,7 @@ func TestIK(t *testing.T) {
 		StaticKeypair: staticR,
 	})
 
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	hsI.WriteMessage(out, []byte("abc"))
 	assert.Len(t, out.Serialize(), 99)
 	assert.Len(t, out.Serialize(), 99)
@@ -211,7 +211,7 @@ func TestXXRoundtrip(t *testing.T) {
 	})
 
 	// -> e
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	hsI.WriteMessage(out, []byte("abcdef"))
 	assert.Len(t, out.Serialize(), 38)
 	var payload []byte
@@ -276,7 +276,7 @@ func Test_NNpsk0_Roundtrip(t *testing.T) {
 	})
 
 	// -> e
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	hsI.WriteMessage(out, nil)
 	assert.Len(t, out.Serialize(), 48)
 	res, _, _, err := hsR.ReadMessage(nil, out)
@@ -316,7 +316,7 @@ func Test_Npsk0(t *testing.T) {
 		PresharedKey: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20},
 		PeerStatic:   &SimpleIdentity{staticR.Public},
 	})
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	hsI.WriteMessage(out, nil)
 	assert.Len(t, out.Serialize(), 48)
 
@@ -339,7 +339,7 @@ func Test_Xpsk0(t *testing.T) {
 		StaticKeypair: staticI,
 		PeerStatic:    &SimpleIdentity{staticR.Public},
 	})
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	hs.WriteMessage(out, nil)
 	assert.Len(t, out.Serialize(), 96)
 
@@ -371,7 +371,7 @@ func Test_NNpsk0(t *testing.T) {
 		PresharedKey: psk,
 	})
 
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	hsI.WriteMessage(out, []byte("abc"))
 	assert.Len(t, out.Serialize(), 51)
 	res, _, _, err := hsR.ReadMessage(nil, out)
@@ -417,7 +417,7 @@ func Test_XXpsk0(t *testing.T) {
 		StaticKeypair: staticR,
 	})
 
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	hsI.WriteMessage(out, []byte("abc"))
 	assert.Len(t, out.Serialize(), 51)
 	res, _, _, err := hsR.ReadMessage(nil, out)
@@ -460,7 +460,7 @@ func TestHandshakeRollback(t *testing.T) {
 		Initiator:   false,
 	})
 
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	hsI.WriteMessage(out, []byte("abc"))
 	assert.Len(t, out.Serialize(), 35)
 	res, _, _, err := hsR.ReadMessage(nil, out)
@@ -506,7 +506,7 @@ func TestRekey(t *testing.T) {
 	serverConfig.EphemeralKeypair, _ = DH25519.GenerateKeypair(rng)
 	serverHs, _ := NewHandshakeState(serverConfig)
 
-	out := &SimplePayload{}
+	out := &SimpleMessage{}
 	clientHs.WriteMessage(out, nil)
 	assert.EqualValues(t, out.Length(), 32)
 

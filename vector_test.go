@@ -216,7 +216,7 @@ func TestVectors(t *testing.T) {
 		}
 
 		var res []byte
-		out := &SimplePayload{}
+		out := &SimpleMessage{}
 		csW0, csW1, _ = writer.WriteMessage(out, payload)
 		assert.Equal(t, fmt.Sprintf("%x", out.Serialize()), string(splitLine[1]))
 		res, csR0, csR1, err = reader.ReadMessage(nil, out)
