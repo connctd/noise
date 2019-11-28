@@ -13,6 +13,12 @@ type PrivateIdentity interface {
 	PrivateKey() []byte
 }
 
+// IdentityVerifier can be used by a HandshakeState to verify the remote identity fulfills certain
+// criteria (i.e. signed by common authority etc.)
+type IdentityVerifier interface {
+	VerifyIdentity(id Identity) error
+}
+
 // ReadableHandshakeMessage provides the HandshakeState the possibility to digest handshake messages in other
 // formats than simple concatenated byte slices
 type ReadableHandshakeMessage interface {

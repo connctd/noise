@@ -243,6 +243,7 @@ type HandshakeState struct {
 	msgIdx            int
 	rng               io.Reader
 	identityMarshaler IdentityMarshaler
+	idVerifier        IdentityVerifier
 }
 
 // A Config provides the details necessary to process a Noise handshake. It is
@@ -292,6 +293,9 @@ type Config struct {
 	// IdMarshaller allows you to use more complex IDs than plain public keys, i.e. certificates.
 	// This parameter is optional.
 	IDMarshaler IdentityMarshaler
+
+	// IDVerifier can optionally be set to verify the remote identity.
+	IDVerifier IdentityVerifier
 }
 
 // NewHandshakeState starts a new handshake using the provided configuration.
@@ -306,6 +310,7 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 		initiator:         c.Initiator,
 		rng:               c.Random,
 		identityMarshaler: c.IDMarshaler,
+		idVerifier:        c.IDVerifier,
 	}
 	if hs.identityMarshaler == nil {
 		// Assume that the usual plain public keys are used
@@ -341,6 +346,9 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 		case c.Initiator && m == MessagePatternE:
 			hs.ss.MixHash(hs.e.Public)
 		case !c.Initiator && m == MessagePatternS:
+			if err := hs.eventuallyVerifyIdentity(hs.rs); err != nil {
+				return nil, err
+			}
 			hs.ss.MixHash(hs.rs.PublicKey())
 		case !c.Initiator && m == MessagePatternE:
 			hs.ss.MixHash(hs.re)
@@ -353,12 +361,26 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 		case !c.Initiator && m == MessagePatternE:
 			hs.ss.MixHash(hs.e.Public)
 		case c.Initiator && m == MessagePatternS:
+			if err := hs.eventuallyVerifyIdentity(hs.rs); err != nil {
+				return nil, err
+			}
 			hs.ss.MixHash(hs.rs.PublicKey())
 		case c.Initiator && m == MessagePatternE:
 			hs.ss.MixHash(hs.re)
 		}
 	}
 	return hs, nil
+}
+
+func (hs *HandshakeState) eventuallyVerifyIdentity(id Identity) error {
+	if hs.idVerifier == nil {
+		return nil
+	}
+	err := hs.idVerifier.VerifyIdentity(id)
+	if err != nil {
+		return fmt.Errorf("Verification of remote identity failed: %w", err)
+	}
+	return nil
 }
 
 // WriteMessage appends a handshake message to out. The message will include the
@@ -495,6 +517,9 @@ func (s *HandshakeState) ReadMessage(out []byte, message ReadableHandshakeMessag
 				identity, err := s.identityMarshaler.UnmarshalIdentity(decryptedRawIdentity)
 				if err != nil {
 					return nil, nil, nil, fmt.Errorf("Failed to unmarshal remote identity: %w", err)
+				}
+				if err := s.eventuallyVerifyIdentity(identity); err != nil {
+					return nil, nil, nil, err
 				}
 				s.rs = identity
 			}
