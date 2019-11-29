@@ -220,14 +220,6 @@ const (
 // message.
 const MaxMsgLen = 65535
 
-// IdentityMarshaller provides the HandshakeState with the ability to marshal und unmarshal identities
-// from byte slices, enabling the use of certificates instead of plain public keys
-type IdentityMarshaler interface {
-	UnmarshalIdentity(identityBytes []byte) (Identity, error)
-
-	MarshalIdentity(identity Identity) ([]byte, error)
-}
-
 // A HandshakeState tracks the state of a Noise handshake. It may be discarded
 // after the handshake is complete.
 type HandshakeState struct {

@@ -7,6 +7,14 @@ type Identity interface {
 	PublicKey() []byte
 }
 
+// IdentityMarshaller provides the HandshakeState with the ability to marshal und unmarshal identities
+// from byte slices, enabling the use of certificates instead of plain public keys
+type IdentityMarshaler interface {
+	UnmarshalIdentity(identityBytes []byte) (Identity, error)
+
+	MarshalIdentity(identity Identity) ([]byte, error)
+}
+
 // PrivateIdentity is an Identity with access to the private key
 type PrivateIdentity interface {
 	Identity
