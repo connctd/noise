@@ -1,3 +1,12 @@
+/*
+The concept of identities allows you to amend the static public key (as defined in noiseprotocol)
+with additional metadata, effectively creating a certificate (if the combination if metadata
+and public is signed by trusted party).
+The downside of this approach is, that the private key, which the static public key is derived from
+needs to reside in memory (at least for now), because we will perform DH operations on it.
+So if you want to use certificates with private keys stored in TPMs, TEEs etc. this approach is not for
+you (for now).
+*/
 package noise
 
 import "errors"
