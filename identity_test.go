@@ -81,12 +81,26 @@ func TestXXHandshakeWithIdentityVerifiction(t *testing.T) {
 	require.NoError(t, err)
 
 	msg.Reset()
-	csI1, csI2, err := clientHS.WriteMessage(msg, nil)
+	// csOut, csIn
+	csIOut, csIIn, err := clientHS.WriteMessage(msg, nil)
 	require.NoError(t, err)
-	require.NotEmpty(t, csI1)
-	require.NotEmpty(t, csI2)
-	_, csR1, csR2, err := serverHS.ReadMessage(nil, msg)
+	require.NotEmpty(t, csIOut)
+	require.NotEmpty(t, csIIn)
+	// csIn, csOut
+	_, csRIn, csROut, err := serverHS.ReadMessage(nil, msg)
 	require.NoError(t, err)
-	require.NotEmpty(t, csR1)
-	require.NotEmpty(t, csR2)
+	require.NotEmpty(t, csRIn)
+	require.NotEmpty(t, csROut)
+
+	payload := []byte("To encrypt where no man has encrypted before")
+	encryptedOut := csROut.Encrypt(nil,nil,payload)
+	decryptedOut, err := csIIn.Decrypt(nil,nil, encryptedOut)
+	require.NoError(t, err)
+	assert.EqualValues(t, payload, decryptedOut)
+
+	payload2 := []byte("Encryption the final frontier")
+	encryptedOut2 := csIOut.Encrypt(nil,nil, payload2)
+	decryptedOut2, err := csRIn.Decrypt(nil,nil, encryptedOut2)
+	require.NoError(t,err)
+	assert.EqualValues(t, payload2, decryptedOut2)
 }
