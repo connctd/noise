@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/connctd/smolcert"
+	"github.com/smolcert/smolcert"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -93,14 +93,14 @@ func TestXXHandshakeWithIdentityVerifiction(t *testing.T) {
 	require.NotEmpty(t, csROut)
 
 	payload := []byte("To encrypt where no man has encrypted before")
-	encryptedOut := csROut.Encrypt(nil,nil,payload)
-	decryptedOut, err := csIIn.Decrypt(nil,nil, encryptedOut)
+	encryptedOut := csROut.Encrypt(nil, nil, payload)
+	decryptedOut, err := csIIn.Decrypt(nil, nil, encryptedOut)
 	require.NoError(t, err)
 	assert.EqualValues(t, payload, decryptedOut)
 
 	payload2 := []byte("Encryption the final frontier")
-	encryptedOut2 := csIOut.Encrypt(nil,nil, payload2)
-	decryptedOut2, err := csRIn.Decrypt(nil,nil, encryptedOut2)
-	require.NoError(t,err)
+	encryptedOut2 := csIOut.Encrypt(nil, nil, payload2)
+	decryptedOut2, err := csRIn.Decrypt(nil, nil, encryptedOut2)
+	require.NoError(t, err)
 	assert.EqualValues(t, payload2, decryptedOut2)
 }

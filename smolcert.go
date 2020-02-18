@@ -6,9 +6,9 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/connctd/smolcert"
-	"golang.org/x/crypto/ed25519"
 	"github.com/iost-official/ed25519/extra25519"
+	"github.com/smolcert/smolcert"
+	"golang.org/x/crypto/ed25519"
 )
 
 // SmolIdentity wraps a smolcert based certificate and provides the public
@@ -32,7 +32,7 @@ func (s *SmolIdentity) PublicKey() []byte {
 }
 
 // Cert returns the plain smolcert certificate
-func(s *SmolIdentity) Cert() *smolcert.Certificate {
+func (s *SmolIdentity) Cert() *smolcert.Certificate {
 	return &s.Certificate
 }
 
@@ -47,7 +47,7 @@ func (p *PrivateSmolIdentity) PrivateKey() []byte {
 	var edPrivKey [64]byte
 	var curvePrivKey [32]byte
 	copy(edPrivKey[:], p.privKey)
-	extra25519.PrivateKeyToCurve25519(&curvePrivKey, &edPrivKey)	
+	extra25519.PrivateKeyToCurve25519(&curvePrivKey, &edPrivKey)
 	return curvePrivKey[:]
 }
 
