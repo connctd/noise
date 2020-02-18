@@ -541,7 +541,11 @@ func (s *HandshakeState) ReadMessage(out []byte, message ReadableHandshakeMessag
 			s.ss.MixKeyAndHash(s.psk)
 		}
 	}
-	out, err = s.ss.DecryptAndHash(out, message.ReadPayload())
+	msgBytes, err := message.ReadPayload()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("Failed to read payload from received handshake packet: %w", err)
+	}
+	out, err = s.ss.DecryptAndHash(out, msgBytes)
 	if err != nil {
 		s.ss.Rollback()
 		return nil, nil, nil, fmt.Errorf("Failed to decrypt payload: %w", err)

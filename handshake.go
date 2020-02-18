@@ -5,7 +5,7 @@ package noise
 type ReadableHandshakeMessage interface {
 	ReadEPublic() ([]byte, error)
 	ReadEncryptedIdentity() ([]byte, error)
-	ReadPayload() []byte
+	ReadPayload() ([]byte, error)
 	Length() int
 }
 
@@ -60,8 +60,8 @@ func (s *SimpleMessage) ReadEncryptedIdentity() ([]byte, error) {
 }
 
 // ReadPayload gives you the encrypted bytes of the additional optional payload
-func (s *SimpleMessage) ReadPayload() []byte {
-	return s.payload
+func (s *SimpleMessage) ReadPayload() ([]byte, error) {
+	return s.payload, nil
 }
 
 // Serialize simply concatenates all fields in an expected order
