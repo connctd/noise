@@ -42,6 +42,17 @@ type PrivateSmolIdentity struct {
 	privKey ed25519.PrivateKey
 }
 
+// NewPrivateSmolIdentity creates a new PrivateSmolIdentity which contains the smolcert with the private key.
+// This might be needed for cryptographic operations like eDH or eDSA etc.
+func NewPrivateSmolIdentity(cert *smolcert.Certificate, privKey ed25519.PrivateKey) *PrivateSmolIdentity {
+	return &PrivateSmolIdentity{
+		SmolIdentity: SmolIdentity{
+			Certificate: *cert,
+		},
+		privKey: privKey
+	}
+}
+
 // PrivateKey returns a curve25519 representation of the private key
 func (p *PrivateSmolIdentity) PrivateKey() []byte {
 	var edPrivKey [64]byte
