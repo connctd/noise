@@ -1,5 +1,3 @@
-// +build smolcert
-
 package noise
 
 import (
@@ -49,7 +47,7 @@ func NewPrivateSmolIdentity(cert *smolcert.Certificate, privKey ed25519.PrivateK
 		SmolIdentity: SmolIdentity{
 			Certificate: *cert,
 		},
-		privKey: privKey
+		privKey: privKey,
 	}
 }
 
